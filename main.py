@@ -2,13 +2,13 @@ import os
 from pyrogram import Client
 from aiohttp import web
 
-# --- TERI DETAILS (Maine Bhar Di Hain) ---
+# --- TERI DETAILS ---
 API_ID = 31334323
 API_HASH = "d55ae0078019695fce2e7056d87832cb"
 BOT_TOKEN = "8362775728:AAGFSIGZC2DYRJSPSL67UCJFlU5ffPDXYj8"
-CHANNEL_ID = "voxohost"  # Bina @ ke bhi chalega, ya @voxohost
+CHANNEL_ID = "voxohost"
 
-# --- BOT SETUP ---
+# --- BOT CONFIG ---
 app = Client("my_test_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 routes = web.RouteTableDef()
@@ -44,15 +44,28 @@ async def stream_handler(request):
     except Exception as e:
         return web.Response(text=f"Error aaya bhai: {e}", status=500)
 
-async def web_server():
+# --- FIX: STARTUP LOGIC ---
+# Ye function Bot ko Server ke sath hi start karega
+async def on_startup(web_app):
+    print("Bot Start ho raha hai...")
+    await app.start()
+    print("Bot Connected!")
+
+# Ye function Bot ko safely band karega
+async def on_cleanup(web_app):
+    await app.stop()
+    print("Bot Stopped.")
+
+def create_app():
     web_app = web.Application()
     web_app.add_routes(routes)
+    # Bot ko server loop ke sath jod diya
+    web_app.on_startup.append(on_startup)
+    web_app.on_cleanup.append(on_cleanup)
     return web_app
 
 if __name__ == "__main__":
-    print("Bot Start ho raha hai...")
-    app.start()
-    print("Bot Connected! Server Starting...")
-    
     port = int(os.environ.get("PORT", 8080))
-    web.run_app(web_server(), port=port)
+    # run_app automatically loop handle karega
+    web.run_app(create_app(), port=port)
+    
