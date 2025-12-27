@@ -1,71 +1,56 @@
 import os
 from pyrogram import Client
-from aiohttp import web
+from quart import Quart, request, Response
 
 # --- TERI DETAILS ---
 API_ID = 31334323
 API_HASH = "d55ae0078019695fce2e7056d87832cb"
 BOT_TOKEN = "8362775728:AAGFSIGZC2DYRJSPSL67UCJFlU5ffPDXYj8"
-CHANNEL_ID = "voxohost"
+CHANNEL_ID = "voxohost" 
 
-# --- BOT CONFIG ---
-app = Client("my_test_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# --- SERVER SETUP (No-Crash Logic) ---
+app = Quart(__name__)
+client = Client("voxohost_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-routes = web.RouteTableDef()
+@app.before_serving
+async def start_bot():
+    print("Bot Start ho raha hai...")
+    await client.start()
+    print("Bot Mast Chal Gaya! 🚀")
 
-@routes.get("/")
-async def home(request):
-    return web.Response(text="Bhai Tera Server Mast Chal Raha Hai! 🔥")
+@app.after_serving
+async def stop_bot():
+    await client.stop()
+    print("Bot Band ho gaya.")
 
-@routes.get("/stream/{msg_id}")
-async def stream_handler(request):
+@app.route('/')
+async def home():
+    return "Tera 4K Video Server Ready Hai! 🔥"
+
+@app.route('/stream/<int:msg_id>')
+async def stream_video(msg_id):
     try:
-        msg_id = int(request.match_info['msg_id'])
-        
-        # Channel se message dhundna
-        msg = await app.get_messages(CHANNEL_ID, msg_id)
+        # Message dhoondho
+        msg = await client.get_messages(CHANNEL_ID, msg_id)
         
         if not msg or not msg.video:
-            return web.Response(text="❌ Video nahi mili! Channel me check kar ID sahi hai kya.", status=404)
-        
-        # Streaming Logic
-        async def file_generator():
-            async for chunk in app.stream_media(msg):
+            return "Video nahi mili bhai! ID check kar.", 404
+
+        # --- 4K STREAMING LOGIC ---
+        # Ye chunk-by-chunk data bhejega taaki phone hang na ho
+        async def generate():
+            async for chunk in client.stream_media(msg):
                 yield chunk
 
-        # Browser ko batana ki ye video hai
-        return web.Response(
-            body=file_generator(),
-            headers={
-                "Content-Type": "video/mp4",
-                "Content-Disposition": f'inline; filename="video.mp4"'
-            }
-        )
+        # Browser ko headers bhejo
+        headers = {
+            'Content-Type': 'video/mp4',
+            'Content-Disposition': f'inline; filename="video.mp4"'
+        }
+        
+        return Response(generate(), headers=headers)
+
     except Exception as e:
-        return web.Response(text=f"Error aaya bhai: {e}", status=500)
+        return f"Error: {e}", 500
 
-# --- FIX: STARTUP LOGIC ---
-# Ye function Bot ko Server ke sath hi start karega
-async def on_startup(web_app):
-    print("Bot Start ho raha hai...")
-    await app.start()
-    print("Bot Connected!")
-
-# Ye function Bot ko safely band karega
-async def on_cleanup(web_app):
-    await app.stop()
-    print("Bot Stopped.")
-
-def create_app():
-    web_app = web.Application()
-    web_app.add_routes(routes)
-    # Bot ko server loop ke sath jod diya
-    web_app.on_startup.append(on_startup)
-    web_app.on_cleanup.append(on_cleanup)
-    return web_app
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    # run_app automatically loop handle karega
-    web.run_app(create_app(), port=port)
-    
+# Note: Render isko Procfile ke through chalayega (Uvicorn)
